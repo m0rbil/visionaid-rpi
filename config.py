@@ -96,8 +96,16 @@ GEMINI_MODEL = "gemini-2.5-flash"
 # uyarı cümleleri her iki durumda da aynı kaldı.
 GEMINI_THINKING_BUDGET = 0
 
-# Gemini'ye gönderilecek Türkçe prompt (adaptif)
-VISION_PROMPT = (
+# ── Dil Paketleri ───────────────────────────────────────────────────────────
+#
+# Desteklenen her dil kendi prompt'u ve kendi TTS sesiyle gelir.
+#
+# Prompt'lar ayrı ayrı yazıldı, modele "şunu çevir" dedirtilmedi. Sebebi:
+# konum kalıpları ("tam önünüzde" / "directly ahead of you") güvenlik bilgisi
+# taşıyor. Bunların nasıl ifade edileceğini modele bırakırsak bir dilde uyarı,
+# başka dilde sıradan bir tasvir çıkabilir.
+
+_TR_PROMPT = (
     "Sen görme engelli bir kişinin gözlerisin. Onun yerine bu fotoğrafa bakıyorsun "
     "ve ona en faydalı, en somut bilgiyi Türkçe olarak aktaracaksın.\n\n"
 
@@ -136,10 +144,86 @@ VISION_PROMPT = (
     "farkı) cümleye 'Dikkat,' diyerek başla."
 )
 
+_EN_PROMPT = (
+    "You are the eyes of a person who is blind. You are looking at this photo on "
+    "their behalf and will give them the most useful, most concrete information "
+    "in English.\n\n"
+
+    "First decide what kind of photo this is, then answer according to the "
+    "matching rule:\n\n"
+
+    "1) A ROAD, SIDEWALK, PLACE or INDOOR/OUTDOOR SETTING:\n"
+    "- In the first sentence, say where they are (example: a busy street, a narrow "
+    "corridor, a room).\n"
+    "- In the second sentence you MUST do this: name the 1-2 most important "
+    "obstacles, hazards or objects ahead or nearby, together with their POSITION. "
+    "Use these phrasings for position: 'directly ahead of you', 'to your right', "
+    "'to your left', 'a few steps ahead'. "
+    "Obstacle examples: a step, stairs, a vehicle, a bicycle, a crowd, a narrow "
+    "gap, a hole, a pole.\n"
+    "- If there is no clear obstacle, state a walkable direction or open space "
+    "instead (example: 'the way ahead is clear, you can walk straight on').\n"
+    "- For this category the answer must NEVER be description alone; it MUST "
+    "contain position, direction or safety information.\n"
+    "- Do not exceed 2-3 sentences in total.\n\n"
+
+    "2) A single OBJECT, PRODUCT or piece of TEXT:\n"
+    "- Explain what the object is and what it is used for in 1-2 sentences.\n"
+    "- If there is any text, price, date or quantity on it, read it out exactly.\n\n"
+
+    "3) A PERSON or SOCIAL SETTING:\n"
+    "- Briefly state the setting and roughly how many people are present.\n"
+    "- Mention anything that may concern the user (example: someone is walking "
+    "towards them, someone is holding out their hand).\n"
+    "- Do not exceed 2 sentences.\n\n"
+
+    "4) If the photo is very blurry, dark or unintelligible:\n"
+    "- Do not guess. Instead say clearly: "
+    "'The image is not clear, please point the camera again and try once more.'\n\n"
+
+    "General rules:\n"
+    "- Use plain, short sentences; remember this will be read aloud.\n"
+    "- Avoid unnecessary adjectives and embellishment, be direct and practical.\n"
+    "- If there is a genuinely dangerous situation (an approaching vehicle, a "
+    "stairwell drop, a sudden change in height) begin the sentence with 'Careful,'."
+)
+
+# Desteklenen diller. Yeni dil eklemek için buraya bir satır yeter.
+# Ses adlarının geçerliliği Google'ın ses listesinden doğrulandı:
+# https://cloud.google.com/text-to-speech/docs/voices
+LANGUAGES = {
+    "tr": {
+        "prompt": _TR_PROMPT,
+        "voice": "tr-TR-Chirp3-HD-Achernar",
+        "language_code": "tr-TR",
+    },
+    "en": {
+        "prompt": _EN_PROMPT,
+        "voice": "en-US-Chirp3-HD-Achernar",
+        "language_code": "en-US",
+    },
+}
+
+# Hangi dilde çalışılacağı .env'den okunur, tanımlı değilse Türkçe.
+ACTIVE_LANGUAGE = os.getenv("VISIONAID_LANG", "tr").strip().lower()
+
+if ACTIVE_LANGUAGE not in LANGUAGES:
+    raise ValueError(
+        f"Hata: '{ACTIVE_LANGUAGE}' desteklenen bir dil değil.\n"
+        f"Kullanılabilir diller: {', '.join(sorted(LANGUAGES))}\n"
+        ".env dosyasındaki VISIONAID_LANG değerini düzelt."
+    )
+
+_active = LANGUAGES[ACTIVE_LANGUAGE]
+
+# Diğer modüller bu üç değeri kullanır; hangi dilden geldiğini bilmeleri gerekmez.
+VISION_PROMPT = _active["prompt"]
+
 
 # ── Ses (Google Cloud TTS - Chirp3 HD) Ayarları ─────────────────────────────
 
-GOOGLE_TTS_VOICE = "tr-TR-Chirp3-HD-Achernar"
+GOOGLE_TTS_VOICE = _active["voice"]
+TTS_LANGUAGE_CODE = _active["language_code"]
 
 # Sıkıştırılmamış WAV kullanılıyor: ses kalitesi MP3'e göre belirgin daha iyi.
 # Karşılığında dosya büyük olduğu için indirme süresi uzuyor (bilinçli tercih).

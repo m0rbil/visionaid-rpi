@@ -31,6 +31,7 @@ import player
 import trigger
 import tts
 import vision
+from config import ACTIVE_LANGUAGE
 from timing import StepTimer
 
 SEPARATOR = "─" * 50
@@ -50,6 +51,7 @@ def print_banner() -> None:
     print()
     print(f"  Görüntü kaynağı : {kaynak}")
     print(f"  Tetikleme       : {giris}")
+    print(f"  Çıktı dili      : {ACTIVE_LANGUAGE}")
     print()
     print("  Nasıl kullanılır:")
     print(f"  1. {giris} → fotoğraf alınır")

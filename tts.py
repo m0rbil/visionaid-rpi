@@ -11,6 +11,7 @@ from google.api_core.exceptions import GoogleAPIError
 from config import (
     GOOGLE_TTS_API_KEY,
     GOOGLE_TTS_VOICE,
+    TTS_LANGUAGE_CODE,
     TTS_OUTPUT_FILE,
     mask_secrets,
     require_key,
@@ -40,7 +41,7 @@ def _get_client() -> texttospeech.TextToSpeechClient:
 
 def synthesize_speech(text: str) -> str:
     """
-    Metni Türkçe sese çevirir ve ses dosyası olarak diske yazar.
+    Metni aktif dildeki sese çevirir ve ses dosyası olarak diske yazar.
 
     Ses formatı olarak sıkıştırılmamış WAV (LINEAR16) kullanılır: MP3'e göre
     belirgin daha kaliteli, karşılığında dosya daha büyük.
@@ -58,8 +59,9 @@ def synthesize_speech(text: str) -> str:
     """
     client = _get_client()
 
+    # Dil kodu ve ses adı config'teki aktif dil paketinden gelir.
     voice = texttospeech.VoiceSelectionParams(
-        language_code="tr-TR",
+        language_code=TTS_LANGUAGE_CODE,
         name=GOOGLE_TTS_VOICE,
     )
     audio_config = texttospeech.AudioConfig(
