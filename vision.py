@@ -1,9 +1,7 @@
-# vision.py - Gemini API ile Görüntü Betimleme
-# -----------------------------------------------
-# Bu modülün tek işi: elindeki fotoğrafı Gemini'ye gönderip Türkçe
-# betimleme metnini almak. Fotoğrafın nereden geldiğini bilmez —
-# kameradan da gelmiş olabilir, diskten de. Bu ayrım sayesinde kamera
-# olmadan da test edilebilir.
+# Turns an image into a spoken-language description via Gemini.
+#
+# Takes an image object and does not know where it came from — the camera or
+# the disk — which keeps this module testable without hardware.
 
 from google import genai
 from google.genai import types
@@ -18,22 +16,19 @@ from config import (
     require_key,
 )
 
-# İstemci ilk kullanımda oluşturulup burada saklanır.
-# Her fotoğrafta yeniden kurmak gereksiz zaman kaybı olurdu.
+# Built once on first use and reused; rebuilding per photo wastes time.
 _client = None
 
-# İstek ayarları bir kez hazırlanır, her çağrıda yeniden kurulmaz.
 _REQUEST_CONFIG = types.GenerateContentConfig(
     thinking_config=types.ThinkingConfig(thinking_budget=GEMINI_THINKING_BUDGET)
 )
 
 
 def _get_client() -> genai.Client:
-    """
-    Gemini istemcisini hazırlar. İlk çağrıda kurar, sonrakilerde aynısını verir.
+    """Return the Gemini client, creating it on first call.
 
     Raises:
-        ValueError: API anahtarı tanımlı değilse
+        ValueError: if the API key is not set.
     """
     global _client
 
@@ -44,18 +39,11 @@ def _get_client() -> genai.Client:
 
 
 def describe_image(image: Image.Image) -> str:
-    """
-    Verilen fotoğrafı Gemini'ye gönderir ve Türkçe betimlemeyi döndürür.
-
-    Args:
-        image: Betimlenecek fotoğraf (PIL Image nesnesi)
-
-    Returns:
-        Türkçe betimleme metni
+    """Describe the given image in the active language.
 
     Raises:
-        ValueError: Anahtar eksikse veya yanıt kullanılamazsa
-        ConnectionError: API veya ağ kaynaklı sorunlarda
+        ValueError: if the key is missing or the response is unusable.
+        ConnectionError: on API or network failures.
     """
     client = _get_client()
 
@@ -65,11 +53,9 @@ def describe_image(image: Image.Image) -> str:
             contents=[VISION_PROMPT, image],
             config=_REQUEST_CONFIG,
         )
-        # Yanıt engellendiyse .text None olur; bu yüzden önce boşa çeviriyoruz.
+        # .text is None when the response was blocked.
         description = (response.text or "").strip()
     except Exception as e:
-        # 'from e': asıl hatayı bu hatanın altına iliştirir. Sorun ararken
-        # hatanın nereden kaynaklandığı kaybolmaz.
         raise _explain_api_error(e) from e
 
     if not description:
@@ -83,19 +69,11 @@ def describe_image(image: Image.Image) -> str:
 
 
 def _explain_api_error(error: Exception) -> Exception:
-    """
-    Gemini'den gelen teknik hatayı, kullanıcının anlayacağı ve ne yapması
-    gerektiğini söyleyen bir hataya çevirir.
+    """Translate an API error into one that tells the user what to do.
 
-    Aranan kelimeler bilinçli olarak dardır. Örneğin sadece "invalid"
-    aransaydı, anahtarla hiç ilgisi olmayan hatalarda da kullanıcıya
-    "anahtarın geçersiz" denir ve boşuna anahtarla uğraşırdı.
-
-    Args:
-        error: API'den gelen özgün hata
-
-    Returns:
-        Fırlatılmaya hazır, açıklayıcı hata nesnesi
+    The keywords are deliberately narrow. Matching something broad like
+    "invalid" would blame the API key for unrelated failures and send the
+    user chasing the wrong problem.
     """
     err = str(error).lower()
 
@@ -123,7 +101,7 @@ def _explain_api_error(error: Exception) -> Exception:
             "Farklı bir fotoğraf dene."
         )
 
-    # Tanınmayan hata: ham metni gösteriyoruz, ama önce anahtarı gizliyoruz.
+    # Unrecognised: show the raw text, but mask the key first.
     return ConnectionError(
         f"Hata: Gemini API'den beklenmedik yanıt alındı.\n"
         f"Detay: {mask_secrets(error)}"

@@ -1,13 +1,7 @@
-# camera.py - Fotoğraf Çekme
-# -----------------------------------------------
-# Bu modülün tek işi fotoğraf sağlamak. Gemini'yi, sesi veya butonu bilmez.
+# Supplies an image. Knows nothing about Gemini, speech or the button.
 #
-# İki çalışma modu vardır ve hangisinin kullanılacağına otomatik karar verir:
-#   1. Raspberry Pi modu : picamera2 ile gerçek kameradan çeker
-#   2. Test modu         : picamera2 kurulu değilse (örn. Windows'ta)
-#                          hazır bir fotoğrafı okur
-#
-# Bu sayede Pi olmadan da projenin tamamı çalıştırılıp test edilebilir.
+# Uses the Pi camera when picamera2 is available, and falls back to reading a
+# local test image otherwise, so the pipeline can be exercised without a Pi.
 
 import os
 import time
@@ -16,32 +10,27 @@ from PIL import Image
 
 from config import CAMERA_RESOLUTION, CAMERA_WARMUP_SECONDS, TEST_IMAGE_PATH
 
-# picamera2 sadece Raspberry Pi OS üzerinde bulunur.
-# Kurulu değilse hata vermek yerine test moduna geçilir.
+# picamera2 only exists on Raspberry Pi OS.
 try:
     from picamera2 import Picamera2
     PI_CAMERA_AVAILABLE = True
 except ImportError:
     PI_CAMERA_AVAILABLE = False
 
-CAPTURE_FILE = "capture.jpg"  # Geçici fotoğraf dosyası
+CAPTURE_FILE = "capture.jpg"
 
 
 def is_test_mode() -> bool:
-    """Gerçek kamera yoksa True döner (test modunda çalışılıyor demektir)."""
+    """True when no real camera is available."""
     return not PI_CAMERA_AVAILABLE
 
 
 def capture_image() -> Image.Image:
-    """
-    Ortama uygun yöntemle bir fotoğraf sağlar.
-
-    Returns:
-        Fotoğrafın PIL Image nesnesi
+    """Return an image, from the camera or from the test file.
 
     Raises:
-        RuntimeError: Kamera açılamazsa veya çekim başarısız olursa
-        ValueError: Elde edilen dosya geçerli bir görüntü değilse
+        RuntimeError: if the camera cannot be opened or the capture fails.
+        ValueError: if the resulting file is not a valid image.
     """
     if PI_CAMERA_AVAILABLE:
         _capture_from_pi_camera()
@@ -51,15 +40,10 @@ def capture_image() -> Image.Image:
 
 
 def _capture_from_pi_camera() -> None:
-    """
-    Raspberry Pi kamerasından fotoğraf çeker ve CAPTURE_FILE olarak kaydeder.
+    """Capture a still from the Pi camera and save it as CAPTURE_FILE.
 
-    Çekimden önce kısa bir bekleme yapılır: kameranın otomatik pozlama ve
-    beyaz dengesi ayarları oturmadan çekilen fotoğraf bulanık/karanlık çıkar.
-
-    Kamera 'with' bloğu içinde açılır: çekim sırasında hata çıksa bile blok
-    bitince kamera otomatik olarak serbest bırakılır. Aksi halde kamera
-    meşgul kalır ve bir sonraki butona basışta açılamazdı.
+    The camera is opened in a 'with' block so it is released even if the
+    capture fails; otherwise it stays busy and the next press cannot open it.
     """
     try:
         with Picamera2() as picam2:
@@ -68,14 +52,13 @@ def _capture_from_pi_camera() -> None:
             )
             picam2.start()
 
-            # Pozlama/odak ayarlarının oturması için bekleme (netlik için gerekli)
+            # Let exposure and focus settle before capturing.
             time.sleep(CAMERA_WARMUP_SECONDS)
 
             picam2.capture_file(CAPTURE_FILE)
             picam2.stop()
 
     except Exception as e:
-        # 'from e': asıl kamera hatası bu mesajın altına iliştirilir, iz kaybolmaz.
         raise RuntimeError(
             "Hata: Kameradan fotoğraf çekilemedi.\n"
             "Kamera kablosunun düzgün takılı olduğunu kontrol et.\n"
@@ -87,12 +70,7 @@ def _capture_from_pi_camera() -> None:
 
 
 def _load_test_image() -> Image.Image:
-    """
-    Test modunda kullanılacak hazır fotoğrafı yükler.
-
-    Raises:
-        RuntimeError: Test fotoğrafı bulunamazsa
-    """
+    """Load the stand-in image used when no camera is present."""
     if not os.path.exists(TEST_IMAGE_PATH):
         raise RuntimeError(
             f"Hata: Test modundasın ama '{TEST_IMAGE_PATH}' bulunamadı.\n"
@@ -104,11 +82,10 @@ def _load_test_image() -> Image.Image:
 
 
 def _open_image(path: str) -> Image.Image:
-    """
-    Görüntü dosyasını açar ve gerçekten geçerli bir görüntü olduğunu doğrular.
+    """Open an image file and verify it is not corrupt.
 
-    verify() dosyanın bozuk olup olmadığını kontrol eder, ancak kontrolden
-    sonra dosyayı kullanılamaz hale getirir. Bu yüzden dosya tekrar açılır.
+    verify() consumes the file handle, so the image is opened again after
+    the check.
     """
     try:
         Image.open(path).verify()

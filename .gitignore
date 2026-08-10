@@ -1,17 +1,15 @@
-# Gizli anahtarlar - ASLA GitHub'a gönderilmemeli
+# Secrets - never commit
 .env
 
-# Çalışma sırasında üretilen geçici dosyalar
+# Generated at runtime
 capture.jpg
 output.wav
 output.mp3
 
-# Test modu fotoğrafı - repoya konmaz.
-# Denemek isteyen kendi fotoğrafını bu isimle klasöre koyar.
+# Test image - bring your own
 test.jpg
 
-# Refactoring plan notlari - repoya konmaz (README hikayeyi zaten anlatiyor).
-# Repoda gorunmesini istersen bu satiri sil.
+# Refactoring notes
 PLAN.md
 
 # Python
@@ -20,12 +18,12 @@ __pycache__/
 *.egg-info/
 .Python
 
-# Sanal ortam
+# Virtual environments
 venv/
 .venv/
 env/
 
-# İşletim sistemi / editör
+# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/

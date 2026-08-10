@@ -1,43 +1,27 @@
-# config.py - VisionAid Ayarları
-# -----------------------------------------------
-# Projenin tüm ayarları bu dosyada toplanır.
+# All project settings live here.
 #
-# ÖNEMLİ: Bu dosya GİZLİ BİLGİ İÇERMEZ.
-# API anahtarları .env dosyasından okunur; .env ise GitHub'a gönderilmez.
-# Kurulum için .env.example dosyasını kopyalayıp kendi anahtarlarını yaz.
+# This file contains no secrets. API keys are read from .env, which is
+# gitignored. Copy .env.example to .env and fill in your own keys.
 
 import os
 import re
 
 from dotenv import load_dotenv
 
-# .env dosyasındaki değerleri ortam değişkeni olarak yükler.
-# Dosya yoksa hata vermez, değerler boş kalır (aşağıda kontrol ediliyor).
 load_dotenv()
 
 
-# ── Gizli Anahtarlar (.env dosyasından okunur) ──────────────────────────────
+# ── Secrets (read from .env) ────────────────────────────────────────────────
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GOOGLE_TTS_API_KEY = os.getenv("GOOGLE_TTS_API_KEY", "")
 
 
 def require_key(name: str, value: str) -> str:
-    """
-    Bir anahtarın gerçekten tanımlı olduğunu doğrular.
-
-    Anahtar eksikse program sessizce yanlış çalışmak yerine burada durur ve
-    kullanıcıya ne yapması gerektiğini söyler.
-
-    Args:
-        name: Anahtarın .env içindeki adı (hata mesajında gösterilir)
-        value: Okunan değer
-
-    Returns:
-        Geçerli anahtar değeri
+    """Return the key, or fail with instructions if it is not set.
 
     Raises:
-        ValueError: Anahtar tanımlı değilse
+        ValueError: if the key is missing.
     """
     if not value:
         raise ValueError(
@@ -50,60 +34,44 @@ def require_key(name: str, value: str) -> str:
 
 
 def mask_secrets(text: str) -> str:
-    """
-    Metin içinde geçen API anahtarlarını gizler.
+    """Replace any API key found in the text with '***'.
 
-    Neden gerekli: Google'ın kütüphaneleri hata mesajlarına bazen isteğin
-    tam adresini ekler; anahtar o adresin içinde ('?key=AIza...') geçer.
-    Hata mesajını olduğu gibi ekrana bastığımızda anahtar da görünür olurdu
-    ve paylaşılan bir ekran görüntüsüyle başkasının eline geçebilirdi.
-
-    Bu fonksiyon anahtarı '***' ile değiştirir; mesajın kalanı bozulmaz.
-
-    Args:
-        text: Ekrana basılacak ham hata metni
-
-    Returns:
-        Anahtarları gizlenmiş metin
+    Google client libraries sometimes embed the full request URL in error
+    messages, and the API key travels in that URL as '?key=AIza...'. Printing
+    such an error verbatim would expose the key in terminal output and
+    screenshots.
     """
     safe = str(text)
 
-    # 1) Kendi anahtarlarımız metinde birebir geçiyorsa temizle
     for key in (GEMINI_API_KEY, GOOGLE_TTS_API_KEY):
         if key:
             safe = safe.replace(key, "***")
 
-    # 2) Google anahtar biçimine uyan başka bir dizi kaldıysa onu da temizle
-    #    (AIza ile başlayıp 35 karakter devam eder)
+    # Catch any remaining string shaped like a Google API key.
     return re.sub(r"AIza[0-9A-Za-z_\-]{35}", "***", safe)
 
 
-# ── Gemini (Görüntü Analizi) Ayarları ───────────────────────────────────────
+# ── Gemini (vision) ─────────────────────────────────────────────────────────
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
-# Gemini'nin "düşünme" (thinking) bütçesi. 0 = kapalı.
+# Internal reasoning budget. 0 disables it.
 #
-# Gemini 2.5 modelleri cevap vermeden önce içlerinden akıl yürütür. Bu,
-# çok adımlı problemlerde işe yarar; ama fotoğraf betimleme tek adımlık
-# bir iş olduğu için burada sadece bekleme süresi ekliyor.
-#
-# Ölçüm (aynı fotoğraf, 4'er tur):
-#   Düşünme açık  : ortalama 11.80 sn
-#   Düşünme kapalı: ortalama  1.87 sn   → %84 daha hızlı
-#
-# Betimleme kalitesinde fark görülmedi: uzunluk, konum bilgisi ve
-# uyarı cümleleri her iki durumda da aynı kaldı.
+# Gemini 2.5 models reason before answering, which helps on multi-step
+# problems and is wasted on single-step image description. Measured on the
+# same image, 4 runs each: enabled 11.80 s, disabled 1.87 s (84% faster),
+# with no observable difference in description quality.
 GEMINI_THINKING_BUDGET = 0
 
-# ── Dil Paketleri ───────────────────────────────────────────────────────────
+
+# ── Language packs ──────────────────────────────────────────────────────────
 #
-# Desteklenen her dil kendi prompt'u ve kendi TTS sesiyle gelir.
+# Each supported language ships its own prompt and TTS voice.
 #
-# Prompt'lar ayrı ayrı yazıldı, modele "şunu çevir" dedirtilmedi. Sebebi:
-# konum kalıpları ("tam önünüzde" / "directly ahead of you") güvenlik bilgisi
-# taşıyor. Bunların nasıl ifade edileceğini modele bırakırsak bir dilde uyarı,
-# başka dilde sıradan bir tasvir çıkabilir.
+# The prompts are written separately rather than translated by the model.
+# The positional phrasings ("tam önünüzde" / "directly ahead of you") carry
+# the safety information; leaving their wording to the model risks turning a
+# warning in one language into a plain description in another.
 
 _TR_PROMPT = (
     "Sen görme engelli bir kişinin gözlerisin. Onun yerine bu fotoğrafa bakıyorsun "
@@ -188,9 +156,7 @@ _EN_PROMPT = (
     "stairwell drop, a sudden change in height) begin the sentence with 'Careful,'."
 )
 
-# Desteklenen diller. Yeni dil eklemek için buraya bir satır yeter.
-# Ses adlarının geçerliliği Google'ın ses listesinden doğrulandı:
-# https://cloud.google.com/text-to-speech/docs/voices
+# Voice names verified against https://cloud.google.com/text-to-speech/docs/voices
 LANGUAGES = {
     "tr": {
         "prompt": _TR_PROMPT,
@@ -204,7 +170,6 @@ LANGUAGES = {
     },
 }
 
-# Hangi dilde çalışılacağı .env'den okunur, tanımlı değilse Türkçe.
 ACTIVE_LANGUAGE = os.getenv("VISIONAID_LANG", "tr").strip().lower()
 
 if ACTIVE_LANGUAGE not in LANGUAGES:
@@ -216,38 +181,35 @@ if ACTIVE_LANGUAGE not in LANGUAGES:
 
 _active = LANGUAGES[ACTIVE_LANGUAGE]
 
-# Diğer modüller bu üç değeri kullanır; hangi dilden geldiğini bilmeleri gerekmez.
+# Other modules read these; they never need to know which language is active.
 VISION_PROMPT = _active["prompt"]
 
 
-# ── Ses (Google Cloud TTS - Chirp3 HD) Ayarları ─────────────────────────────
+# ── Speech (Google Cloud TTS, Chirp3-HD) ────────────────────────────────────
 
 GOOGLE_TTS_VOICE = _active["voice"]
 TTS_LANGUAGE_CODE = _active["language_code"]
 
-# Sıkıştırılmamış WAV kullanılıyor: ses kalitesi MP3'e göre belirgin daha iyi.
-# Karşılığında dosya büyük olduğu için indirme süresi uzuyor (bilinçli tercih).
+# Uncompressed WAV: clearly better quality than MP3 from the same voice.
+# The larger download is a deliberate trade-off.
 TTS_OUTPUT_FILE = "output.wav"
 
 
-# ── Raspberry Pi Donanım Ayarları ───────────────────────────────────────────
+# ── Raspberry Pi hardware ───────────────────────────────────────────────────
 
-# Buton bağlantısı:
-#   Pin 11 (GPIO17, BCM) → butonun bir ayağı
-#   Pin 6  (GND)         → butonun diğer ayağı
+# Button wiring: pin 11 (GPIO 17, BCM) to one leg, pin 6 (GND) to the other.
 GPIO_BUTTON_PIN = 17
 
-# Full HD çekim: Gemini'nin küçük detayları (tabela yazısı, basamak kenarı)
-# ayırt edebilmesi için yüksek çözünürlük tercih edildi.
+# Full HD so the model can resolve small details such as sign text or the
+# edge of a step.
 CAMERA_RESOLUTION = (1920, 1080)
 
-# Kameranın otomatik pozlama/odak ayarlarını oturtması için beklenen süre.
-# Fotoğrafın net çıkması için gerekli (bilinçli tercih).
+# Time given to auto-exposure and white balance before capturing. Without it
+# the frame comes out blurry or dark and the description becomes useless.
 CAMERA_WARMUP_SECONDS = 1.5
 
 
-# ── Test Modu Ayarları ──────────────────────────────────────────────────────
+# ── Test mode ───────────────────────────────────────────────────────────────
 
-# Raspberry Pi kamerası bulunamazsa (örneğin Windows'ta geliştirme yaparken)
-# kamera yerine bu fotoğraf kullanılır.
+# Used instead of the camera when picamera2 is unavailable.
 TEST_IMAGE_PATH = "test.jpg"

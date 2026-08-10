@@ -1,23 +1,21 @@
-# Görüntü analizi (Gemini)
-# Not: Eski 'google-generativeai' paketinin desteği sona erdi ve "düşünme"
-# ayarını desteklemiyordu. Yeni SDK'ya geçildi.
+# Vision (Gemini)
 google-genai>=1.0.0
 
-# Metinden sese (Google Cloud TTS - Chirp3 HD)
+# Text-to-speech (Google Cloud TTS, Chirp3-HD)
 google-cloud-texttospeech>=2.16.0
 
-# Görüntü işleme
+# Image handling
 Pillow>=10.0.0
 
-# Ses çalma
+# Audio playback
 pygame>=2.5.2
 
-# .env dosyasından anahtar okuma
+# Reads API keys from .env
 python-dotenv>=1.0.0
 
-# GPIO butonu - yalnızca Raspberry Pi'de gereklidir.
-# Windows'ta kurulmasa da program çalışır (Enter tuşuna düşer).
+# GPIO button - Raspberry Pi only. Without it the program falls back to the
+# Enter key, so it is not required on a development machine.
 gpiozero>=2.0 ; platform_machine == "aarch64" or platform_machine == "armv7l"
 
-# NOT: picamera2 pip ile kurulmaz. Raspberry Pi OS'ta hazır gelir;
-# gelmiyorsa: sudo apt install -y python3-picamera2
+# picamera2 is not pip-installable. It ships with Raspberry Pi OS; if missing:
+#   sudo apt install -y python3-picamera2

@@ -1,13 +1,9 @@
-# timing.py - Adım Sürelerini Ölçme
-# -----------------------------------------------
-# Bu modülün tek işi: her adımın kaç saniye sürdüğünü ölçmek ve sonunda
-# tablo halinde göstermek. Böylece gecikmenin hangi adımdan kaynaklandığı
-# tahmin edilmek yerine ölçülerek görülür.
+# Measures how long each pipeline step takes, so the delay is observed
+# rather than guessed at.
 #
-# Kullanımı:
 #     timer = StepTimer()
-#     with timer.measure("Kamera"):
-#         ...ölçülecek işlem...
+#     with timer.measure("Camera"):
+#         ...
 #     timer.print_report()
 
 import time
@@ -15,27 +11,24 @@ from contextlib import contextmanager
 
 
 class StepTimer:
-    """Boru hattındaki adımların sürelerini sırayla kaydeder."""
+    """Records the duration of each pipeline step in order."""
 
     def __init__(self) -> None:
-        # [(adım adı, süre saniye, gecikmeye dahil mi), ...] şeklinde tutulur
         self.steps: list[tuple[str, float, bool]] = []
 
     @contextmanager
     def measure(self, name: str, is_latency: bool = True):
-        """
-        Bir adımın süresini ölçer.
+        """Time the enclosed block.
 
-        'with' bloğuna girildiğinde saat başlar, çıkıldığında durur.
-        İşlem hata verse bile süre kaydedilir (hatanın ne kadar sürdüğü de
-        bilgidir) ve hata normal şekilde yukarı iletilir.
+        The duration is recorded even when the block raises, and the error
+        propagates normally.
 
         Args:
-            name: Tabloda görünecek adım adı
-            is_latency: Bu adım "gecikme"ye dahil mi?
-                Kullanıcı sesin BAŞLAMASINI bekler, bitmesini değil. Bu yüzden
-                sesin çalma süresi bir bekleme değildir; konuşmanın kendi
-                uzunluğudur ve gecikme sayılmaz (is_latency=False).
+            name: label shown in the report.
+            is_latency: whether this step counts towards perceived latency.
+                The user waits for speech to START, not to finish, so
+                playback duration is the length of the sentence rather than
+                a delay and is excluded.
         """
         start = time.perf_counter()
         try:
@@ -45,20 +38,18 @@ class StepTimer:
 
     @property
     def latency_total(self) -> float:
-        """Kullanıcının beklediği süre: tetiklemeden ilk sese kadar."""
+        """Time from trigger to first audio."""
         return sum(d for _, d, is_latency in self.steps if is_latency)
 
     @property
     def total(self) -> float:
-        """Tüm adımların toplam süresi (ses çalma dahil)."""
+        """Total time including playback."""
         return sum(duration for _, duration, _ in self.steps)
 
     def print_report(self) -> None:
-        """
-        Ölçüm sonuçlarını tablo halinde yazdırır.
+        """Print the results, keeping latency and playback separate.
 
-        Gecikme adımları ile ses çalma süresi ayrı gösterilir: ikisini tek
-        toplamda birleştirmek gecikmeyi olduğundan büyük gösterirdi.
+        Combining them into a single total would overstate the delay.
         """
         if not self.steps:
             return

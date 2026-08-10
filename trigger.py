@@ -1,41 +1,34 @@
-# trigger.py - Tetikleme (Buton / Klavye)
-# -----------------------------------------------
-# Bu modülün tek işi: "kullanıcı fotoğraf çekilmesini istedi mi?" sorusuna
-# cevap vermek. Fotoğrafın nasıl çekildiğini, ne yapılacağını bilmez.
+# Answers one question: did the user ask for a photo?
 #
-# İki mod otomatik olarak seçilir:
-#   1. Buton modu   : gpiozero kuruluysa GPIO butonu beklenir
-#   2. Klavye modu  : değilse (örn. Windows'ta) Enter tuşu beklenir
+# Uses the GPIO button when gpiozero is available, and falls back to the
+# Enter key otherwise.
 #
-# Donanım bağlantısı:
-#   Pin 11 (GPIO17, BCM) → butonun bir ayağı
-#   Pin 6  (GND)         → butonun diğer ayağı
-#
-# Buton basılınca GPIO17 toprağa (GND) bağlanır. Bu yüzden Pi'nin dahili
-# pull-up direnci kullanılır: pin normalde yüksek (1), basılınca düşük (0)
-# olur. Harici direnç gerekmez.
+# Wiring: pin 11 (GPIO 17, BCM) to one button leg, pin 6 (GND) to the other.
+# Pressing the button ties GPIO 17 to ground, so the Pi's internal pull-up is
+# enabled: the pin idles HIGH and reads LOW when pressed. No external
+# resistor required.
 
 from config import GPIO_BUTTON_PIN
 
-# gpiozero sadece Raspberry Pi üzerinde anlamlıdır.
+# gpiozero is only meaningful on a Raspberry Pi. The except is broad on
+# purpose: even when installed, it can fail off-Pi because no pin factory
+# is available.
 try:
     from gpiozero import Button
     GPIO_AVAILABLE = True
 except Exception:
-    # Sadece ImportError değil: gpiozero kurulu olsa bile Pi dışında
-    # pin fabrikası bulunamadığı için başka hatalar da verebilir.
     GPIO_AVAILABLE = False
 
 _button = None
 
 
 def is_button_mode() -> bool:
-    """GPIO butonu kullanılabiliyorsa True döner."""
+    """True when the GPIO button is usable."""
     return GPIO_AVAILABLE
 
 
 def _get_button() -> "Button":
-    """Buton nesnesini hazırlar. İlk çağrıda kurar, sonra aynısını verir."""
+    """Return the button, creating it on first call."""
     global _button
 
     if _button is None:
@@ -45,12 +38,10 @@ def _get_button() -> "Button":
 
 
 def wait_for_trigger() -> bool:
-    """
-    Kullanıcının tetiklemesini bekler.
+    """Block until the user acts.
 
     Returns:
-        True: Fotoğraf çekilsin
-        False: Programdan çıkılsın
+        True to take a photo, False to quit.
     """
     if GPIO_AVAILABLE:
         return _wait_for_button()
@@ -59,11 +50,10 @@ def wait_for_trigger() -> bool:
 
 
 def _wait_for_button() -> bool:
-    """
-    GPIO butonuna basılmasını bekler.
+    """Wait for a GPIO button press.
 
-    Buton modunda çıkış için klavyeden Ctrl+C kullanılır; bu durum
-    KeyboardInterrupt olarak gelir ve çıkış isteği sayılır.
+    In button mode the only way out is Ctrl+C, which arrives as
+    KeyboardInterrupt and counts as a request to quit.
     """
     print("  📸 Fotoğraf çekmek için butona bas (çıkış için Ctrl+C)")
     try:
@@ -74,13 +64,7 @@ def _wait_for_button() -> bool:
 
 
 def _wait_for_enter() -> bool:
-    """
-    Klavyeden Enter tuşunu bekler (buton yokken kullanılır).
-
-    Returns:
-        True: Enter'a basıldı
-        False: 'q' yazıldı veya Ctrl+C ile çıkıldı
-    """
+    """Wait for the Enter key, used when no button is present."""
     try:
         raw = input("  📸 Fotoğraf çekmek için Enter'a bas (veya q=çıkış): ").strip()
     except (KeyboardInterrupt, EOFError):

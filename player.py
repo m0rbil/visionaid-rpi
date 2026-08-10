@@ -1,12 +1,7 @@
-# player.py - Ses Çalma
-# -----------------------------------------------
-# Bu modülün tek işi: hazır bir ses dosyasını çalmak ve sonra silmek.
-# Sesin nasıl üretildiğini bilmez (o iş tts.py'ye ait).
+# Plays an audio file, then deletes it. Knows nothing about how it was made.
 #
-# Bluetooth kulaklık hakkında not: burada Bluetooth'a özel kod yoktur.
-# pygame sesi işletim sisteminin varsayılan çıkışına gönderir; kulaklık
-# Raspberry Pi'ye eşleştirildiğinde varsayılan çıkış otomatik olarak
-# kulaklık olur ve ses oradan duyulur.
+# Bluetooth needs no code here: pygame writes to the OS default audio sink,
+# and a paired headset becomes that sink automatically.
 
 import os
 import time
@@ -15,25 +10,21 @@ import pygame
 
 
 def play_audio(filepath: str) -> None:
-    """
-    Ses dosyasını çalar ve bitmesini bekler.
+    """Play the file and block until it finishes.
 
-    Ses aygıtı 'finally' bloğunda kapatılır: çalma sırasında hata çıksa bile
-    aygıt serbest bırakılır. Aksi halde ses kartı meşgul kalır ve bir sonraki
-    denemede ses hiç çıkmazdı. (Kameradaki 'with' bloğuyla aynı mantık.)
-
-    Args:
-        filepath: Çalınacak ses dosyasının yolu
+    The mixer is closed in a 'finally' block so the audio device is released
+    even if playback fails; otherwise it stays busy and the next attempt is
+    silent.
 
     Raises:
-        RuntimeError: Ses aygıtı açılamazsa veya çalma başarısız olursa
+        RuntimeError: if the device cannot be opened or playback fails.
     """
     try:
         pygame.mixer.init()
         pygame.mixer.music.load(filepath)
         pygame.mixer.music.play()
 
-        # Ses bitene kadar bekle; beklemezsek program sesi kesip devam eder.
+        # Without this wait the program would cut the audio short.
         while pygame.mixer.music.get_busy():
             time.sleep(0.1)
 
@@ -49,8 +40,8 @@ def play_audio(filepath: str) -> None:
         ) from e
 
     finally:
-        # Kapatma sırasında çıkan hata yutulur: asıl hatayı gizlememesi gerekir,
-        # ayrıca kapatma başarısız olsa da yapılabilecek bir şey yoktur.
+        # Swallowed on purpose: a shutdown error must not mask the real one,
+        # and there is nothing useful to do about it.
         try:
             pygame.mixer.music.unload()
             pygame.mixer.quit()
@@ -59,15 +50,11 @@ def play_audio(filepath: str) -> None:
 
 
 def cleanup(filepath: str) -> None:
-    """
-    Geçici ses dosyasını siler.
+    """Delete the temporary audio file.
 
-    Silinemezse program durmaz: dosyanın kalması işleyişi bozmaz,
-    bir sonraki çalıştırmada zaten üzerine yazılır.
-
-    Dosya zaten yoksa os.remove hata verir, ama o hata da OSError olduğu
-    için aşağıdaki except tarafından yakalanır; ayrıca varlık kontrolü
-    yapmaya gerek yoktur.
+    Failure is ignored: a leftover file is harmless and gets overwritten on
+    the next run. A missing file raises OSError, which the same handler
+    catches, so no existence check is needed.
     """
     try:
         os.remove(filepath)

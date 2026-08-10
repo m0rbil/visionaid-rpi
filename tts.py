@@ -1,8 +1,7 @@
-# tts.py - Metinden Sese Dönüştürme (Google Cloud TTS - Chirp3 HD)
-# -----------------------------------------------
-# Bu modülün tek işi: verilen metni ses dosyasına çevirmek.
-# Sesi ÇALMAZ — o iş player.py'ye ait. Bu ayrım sayesinde "ses üretme"
-# ve "ses çalma" sürelerini ayrı ayrı ölçebiliyoruz.
+# Turns text into an audio file via Google Cloud TTS.
+#
+# Does not play the audio — that belongs to player.py. Keeping them apart
+# lets the synthesis and playback times be measured separately.
 
 from google.cloud import texttospeech
 from google.api_core import client_options as client_options_lib
@@ -17,16 +16,15 @@ from config import (
     require_key,
 )
 
-# İstemci ilk kullanımda oluşturulup saklanır (her seferinde kurmak yavaş).
+# Built once on first use and reused.
 _client = None
 
 
 def _get_client() -> texttospeech.TextToSpeechClient:
-    """
-    Google Cloud TTS istemcisini hazırlar. İlk çağrıda kurar, sonra aynısını verir.
+    """Return the TTS client, creating it on first call.
 
     Raises:
-        ValueError: API anahtarı tanımlı değilse
+        ValueError: if the API key is not set.
     """
     global _client
 
@@ -40,26 +38,18 @@ def _get_client() -> texttospeech.TextToSpeechClient:
 
 
 def synthesize_speech(text: str) -> str:
-    """
-    Metni aktif dildeki sese çevirir ve ses dosyası olarak diske yazar.
-
-    Ses formatı olarak sıkıştırılmamış WAV (LINEAR16) kullanılır: MP3'e göre
-    belirgin daha kaliteli, karşılığında dosya daha büyük.
-
-    Args:
-        text: Seslendirilecek Türkçe metin
+    """Synthesise the text in the active language and write it to disk.
 
     Returns:
-        Oluşturulan ses dosyasının yolu
+        Path to the generated audio file.
 
     Raises:
-        ValueError: Anahtar eksikse
-        ConnectionError: API veya ağ kaynaklı sorunlarda
-        RuntimeError: Beklenmedik durumlarda
+        ValueError: if the key is missing.
+        ConnectionError: on API or network failures.
+        RuntimeError: on anything unexpected.
     """
     client = _get_client()
 
-    # Dil kodu ve ses adı config'teki aktif dil paketinden gelir.
     voice = texttospeech.VoiceSelectionParams(
         language_code=TTS_LANGUAGE_CODE,
         name=GOOGLE_TTS_VOICE,
@@ -78,7 +68,6 @@ def synthesize_speech(text: str) -> str:
             }
         )
     except GoogleAPIError as e:
-        # 'from e': asıl hatayı bu hatanın altına iliştirir, iz kaybolmaz.
         raise _explain_api_error(e) from e
     except Exception as e:
         err = str(e).lower()
@@ -98,10 +87,7 @@ def synthesize_speech(text: str) -> str:
 
 
 def _explain_api_error(error: GoogleAPIError) -> Exception:
-    """
-    Cloud TTS'ten gelen teknik hatayı, kullanıcının ne yapması gerektiğini
-    söyleyen bir hataya çevirir.
-    """
+    """Translate a Cloud TTS error into one that tells the user what to do."""
     err = str(error).lower()
 
     if any(k in err for k in ("api key", "permission", "unauthenticated")):
@@ -117,7 +103,7 @@ def _explain_api_error(error: GoogleAPIError) -> Exception:
             "Google Cloud Console'dan kota durumunu kontrol et."
         )
 
-    # Tanınmayan hata: ham metni gösteriyoruz, ama önce anahtarı gizliyoruz.
+    # Unrecognised: show the raw text, but mask the key first.
     return ConnectionError(
         f"Hata: Google Cloud TTS API hatası.\nDetay: {mask_secrets(error)}"
     )

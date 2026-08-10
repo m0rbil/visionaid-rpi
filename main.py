@@ -1,28 +1,16 @@
-# main.py - VisionAid Ana Döngü
-# -----------------------------------------------
-# Bu dosya hiçbir işi kendisi yapmaz; sadece adımları doğru sırayla çağırır:
+# Entry point. Does no work itself — it calls each step in order:
 #
-#   tetikleme → fotoğraf çek → Gemini'ye betimlet → sese çevir → çal
+#     trigger → capture → describe → synthesise → play
 #
-# Her adım kendi dosyasında olduğu için buradaki akış tek bakışta okunur.
-#
-# Çalışma ortamına göre kendini ayarlar:
-#   - Raspberry Pi'de : GPIO butonu + Pi kamerası
-#   - Windows'ta      : Enter tuşu + hazır test fotoğrafı
+# Adapts to its environment: GPIO button and Pi camera on a Raspberry Pi,
+# Enter key and a test image elsewhere.
 
 import sys
 import textwrap
 
-# Ekran çıktısını UTF-8'e sabitler.
-#
-# Neden gerekli: Windows'ta varsayılan kodlama Türkçe sistemlerde cp1254'tür
-# ve aşağıdaki çerçeve karakterleri (╔═╗) ile emoji (📸 ✅) o kodlamada
-# bulunmaz. Çıktı bir dosyaya yönlendirildiğinde program daha açılış
-# ekranında çökerdi. Linux/Raspberry Pi zaten UTF-8 kullandığı için orada
-# sorun çıkmıyordu.
-#
-# errors="replace": beklenmedik bir karakter yine de gelirse program
-# çökmek yerine o karakteri '?' ile gösterir.
+# Force UTF-8 output. On Turkish Windows the default encoding is cp1254,
+# which lacks the box-drawing characters and emoji used below, and the
+# program would crash on startup when output is redirected.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
@@ -39,7 +27,7 @@ VERSION = "1.2.0"
 
 
 def print_banner() -> None:
-    """Açılış ekranını ve içinde bulunulan çalışma modunu yazdırır."""
+    """Print the splash screen and the detected operating mode."""
     giris = "GPIO butonuna bas" if trigger.is_button_mode() else "Enter'a bas"
     kaynak = "test fotoğrafı" if camera.is_test_mode() else "kamera"
 
@@ -55,13 +43,13 @@ def print_banner() -> None:
     print()
     print("  Nasıl kullanılır:")
     print(f"  1. {giris} → fotoğraf alınır")
-    print("  2. Gemini fotoğrafı Türkçe betimler")
+    print("  2. Gemini fotoğrafı betimler")
     print("  3. Betimleme seslendirilir")
     print()
 
 
 def print_description(description: str) -> None:
-    """Betimlemeyi çerçeve içinde, satırlara bölerek ekrana yazdırır."""
+    """Print the description wrapped inside a frame."""
     print()
     print("  ┌─ Gemini Betimleme " + "─" * 31)
     for line in textwrap.wrap(description, width=60):
@@ -71,12 +59,10 @@ def print_description(description: str) -> None:
 
 
 def run_pipeline() -> bool:
-    """
-    Tek bir tur için tüm adımları sırayla çalıştırır ve sürelerini ölçer.
+    """Run one full cycle, timing each step.
 
     Returns:
-        True: Başarılı
-        False: Hata oluştu (kullanıcıya mesaj zaten gösterildi)
+        True on success, False if an error was already reported.
     """
     timer = StepTimer()
     audio_file = None
@@ -96,8 +82,7 @@ def run_pipeline() -> bool:
         with timer.measure("Ses üretimi (TTS)"):
             audio_file = tts.synthesize_speech(description)
 
-        # is_latency=False: bu süre kullanıcının beklediği gecikme değil,
-        # konuşmanın kendi uzunluğudur.
+        # Playback time is the length of the sentence, not a delay.
         with timer.measure("Ses çalma", is_latency=False):
             player.play_audio(audio_file)
 
@@ -109,9 +94,7 @@ def run_pipeline() -> bool:
         return False
 
     finally:
-        # Geçici ses dosyası her durumda silinir; çalma sırasında hata çıksa
-        # bile diskte kalmaz. Ses hiç üretilemediyse audio_file None'dır ve
-        # silinecek bir şey yoktur.
+        # Runs even if playback failed, so no stale file is left behind.
         if audio_file:
             player.cleanup(audio_file)
 
@@ -121,7 +104,7 @@ def run_pipeline() -> bool:
 
 
 def main() -> None:
-    """Kullanıcı çıkmak isteyene kadar tetikleme bekleyip pipeline'ı çalıştırır."""
+    """Wait for a trigger and run the pipeline until the user quits."""
     print_banner()
 
     session_count = 0
